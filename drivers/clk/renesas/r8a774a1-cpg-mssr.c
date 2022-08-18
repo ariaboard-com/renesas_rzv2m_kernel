@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
- * r8a774a1 Clock Pulse Generator / Module Standby and Software Reset
+ * r8a774a1/r8a774a3 Clock Pulse Generator / Module Standby and Software Reset
  *
- * Copyright (C) 2018 Renesas Electronics Corp.
+ * Copyright (C) 2018-2020 Renesas Electronics Corp.
  *
  * Based on r8a7796-cpg-mssr.c
  *
@@ -13,6 +13,7 @@
 #include <linux/init.h>
 #include <linux/kernel.h>
 #include <linux/soc/renesas/rcar-rst.h>
+#include <linux/of.h>
 
 #include <dt-bindings/clock/r8a774a1-cpg-mssr.h>
 
@@ -80,6 +81,7 @@ static const struct cpg_core_clk r8a774a1_core_clks[] __initconst = {
 	/* Core Clock Outputs */
 	DEF_GEN3_Z("z",		R8A774A1_CLK_Z,     CLK_TYPE_GEN3_Z,  CLK_PLL0, 2, 8),
 	DEF_GEN3_Z("z2",	R8A774A1_CLK_Z2,    CLK_TYPE_GEN3_Z,  CLK_PLL2, 2, 0),
+	DEF_GEN3_Z("zg",	R8A774A1_CLK_ZG,    CLK_TYPE_GEN3_ZG, CLK_PLL4, 4, 24),
 	DEF_FIXED("ztr",        R8A774A1_CLK_ZTR,   CLK_PLL1_DIV2,  6, 1),
 	DEF_FIXED("ztrd2",      R8A774A1_CLK_ZTRD2, CLK_PLL1_DIV2, 12, 1),
 	DEF_FIXED("zt",         R8A774A1_CLK_ZT,    CLK_PLL1_DIV2,  4, 1),
@@ -119,13 +121,17 @@ static const struct cpg_core_clk r8a774a1_core_clks[] __initconst = {
 	DEF_BASE("r",           R8A774A1_CLK_R,     CLK_TYPE_GEN3_R, CLK_RINT),
 };
 
-static const struct mssr_mod_clk r8a774a1_mod_clks[] __initconst = {
+static struct mssr_mod_clk r8a774a1_mod_clks[] __initdata = {
+	DEF_MOD("3dge",			 112,	R8A774A1_CLK_ZG),
 	DEF_MOD("tmu4",			 121,	R8A774A1_CLK_S0D6),
 	DEF_MOD("tmu3",			 122,	R8A774A1_CLK_S3D2),
 	DEF_MOD("tmu2",			 123,	R8A774A1_CLK_S3D2),
 	DEF_MOD("tmu1",			 124,	R8A774A1_CLK_S3D2),
 	DEF_MOD("tmu0",			 125,	R8A774A1_CLK_CP),
 	DEF_MOD("fdp1-0",		 119,	R8A774A1_CLK_S0D1),
+	DEF_MOD("ivdp1c",		 128,	R8A774A1_CLK_S0D2),
+	DEF_MOD("vcplf",		 130,	R8A774A1_CLK_S0D2),
+	DEF_MOD("vdpb",			 131,	R8A774A1_CLK_S0D2),
 	DEF_MOD("scif5",		 202,	R8A774A1_CLK_S3D4),
 	DEF_MOD("scif4",		 203,	R8A774A1_CLK_S3D4),
 	DEF_MOD("scif3",		 204,	R8A774A1_CLK_S3D4),
@@ -142,6 +148,7 @@ static const struct mssr_mod_clk r8a774a1_mod_clks[] __initconst = {
 	DEF_MOD("cmt2",			 301,	R8A774A1_CLK_R),
 	DEF_MOD("cmt1",			 302,	R8A774A1_CLK_R),
 	DEF_MOD("cmt0",			 303,	R8A774A1_CLK_R),
+	DEF_MOD("tpu",			 304,	R8A774A1_CLK_S3D4),
 	DEF_MOD("scif2",		 310,	R8A774A1_CLK_S3D4),
 	DEF_MOD("sdif3",		 311,	R8A774A1_CLK_SD3),
 	DEF_MOD("sdif2",		 312,	R8A774A1_CLK_SD2),
@@ -258,19 +265,19 @@ static const unsigned int r8a774a1_crit_mod_clks[] __initconst = {
  * 14 13 19 17	(MHz)
  *-------------------------------------------------------------------------
  * 0  0  0  0	16.66 x 1	x180	x192	x144	x192	x144	/16
- * 0  0  0  1	16.66 x 1	x180	x192	x144	x128	x144	/16
+ * 0  0  0  1	16.66 x 1	x180	x192	x144	x168	x144	/16
  * 0  0  1  0	Prohibited setting
  * 0  0  1  1	16.66 x 1	x180	x192	x144	x192	x144	/16
  * 0  1  0  0	20    x 1	x150	x160	x120	x160	x120	/19
- * 0  1  0  1	20    x 1	x150	x160	x120	x106	x120	/19
+ * 0  1  0  1	20    x 1	x150	x160	x120	x140	x120	/19
  * 0  1  1  0	Prohibited setting
  * 0  1  1  1	20    x 1	x150	x160	x120	x160	x120	/19
  * 1  0  0  0	25    x 1	x120	x128	x96	x128	x96	/24
- * 1  0  0  1	25    x 1	x120	x128	x96	x84	x96	/24
+ * 1  0  0  1	25    x 1	x120	x128	x96	x112	x96	/24
  * 1  0  1  0	Prohibited setting
  * 1  0  1  1	25    x 1	x120	x128	x96	x128	x96	/24
  * 1  1  0  0	33.33 / 2	x180	x192	x144	x192	x144	/32
- * 1  1  0  1	33.33 / 2	x180	x192	x144	x128	x144	/32
+ * 1  1  0  1	33.33 / 2	x180	x192	x144	x168	x144	/32
  * 1  1  1  0	Prohibited setting
  * 1  1  1  1	33.33 / 2	x180	x192	x144	x192	x144	/32
  */
@@ -282,21 +289,29 @@ static const unsigned int r8a774a1_crit_mod_clks[] __initconst = {
 static const struct rcar_gen3_cpg_pll_config cpg_pll_configs[16] __initconst = {
 	/* EXTAL div	PLL1 mult/div	PLL3 mult/div	OSC prediv */
 	{ 1,		192,	1,	192,	1,	16,	},
-	{ 1,		192,	1,	128,	1,	16,	},
+	{ 1,		192,	1,	168,	1,	16,	},
 	{ 0, /* Prohibited setting */				},
 	{ 1,		192,	1,	192,	1,	16,	},
 	{ 1,		160,	1,	160,	1,	19,	},
-	{ 1,		160,	1,	106,	1,	19,	},
+	{ 1,		160,	1,	140,	1,	19,	},
 	{ 0, /* Prohibited setting */				},
 	{ 1,		160,	1,	160,	1,	19,	},
 	{ 1,		128,	1,	128,	1,	24,	},
-	{ 1,		128,	1,	84,	1,	24,	},
+	{ 1,		128,	1,	112,	1,	24,	},
 	{ 0, /* Prohibited setting */				},
 	{ 1,		128,	1,	128,	1,	24,	},
 	{ 2,		192,	1,	192,	1,	32,	},
-	{ 2,		192,	1,	128,	1,	32,	},
+	{ 2,		192,	1,	168,	1,	32,	},
 	{ 0, /* Prohibited setting */				},
 	{ 2,		192,	1,	192,	1,	32,	},
+};
+
+/*
+ * Fixups for RZ/G2M v3.0 (aka R8A774A3)
+ */
+
+static const unsigned int r8a774a3_mod_nullify[] __initconst = {
+	MOD_CLK_ID(617),			/* FCPCI0 */
 };
 
 static int __init r8a774a1_cpg_mssr_init(struct device *dev)
@@ -314,6 +329,12 @@ static int __init r8a774a1_cpg_mssr_init(struct device *dev)
 		dev_err(dev, "Prohibited setting (cpg_mode=0x%x)\n", cpg_mode);
 		return -EINVAL;
 	}
+
+	if (of_device_is_compatible(dev->of_node, "renesas,r8a774a3-cpg-mssr"))
+		mssr_mod_nullify(r8a774a1_mod_clks,
+				 ARRAY_SIZE(r8a774a1_mod_clks),
+				 r8a774a3_mod_nullify,
+				 ARRAY_SIZE(r8a774a3_mod_nullify));
 
 	return rcar_gen3_cpg_init(cpg_pll_config, CLK_EXTALR, cpg_mode);
 }

@@ -81,24 +81,8 @@ static struct renesas_sdhi_scc rcar_gen3_scc_taps[] = {
 	{
 		.clk_rate = 0,
 		.tap = 0x00000300,
-		.tap_hs400 = 0x00000704,
+		.tap_hs400_4tap = 0x00000100,
 	},
-};
-
-static const struct renesas_sdhi_of_data of_rcar_r8a7795_compatible = {
-	.tmio_flags	= TMIO_MMC_HAS_IDLE_WAIT | TMIO_MMC_CLK_ACTUAL |
-			  TMIO_MMC_HAVE_CBSY | TMIO_MMC_MIN_RCAR2 |
-			  TMIO_MMC_HAVE_4TAP_HS400,
-	.capabilities	= MMC_CAP_SD_HIGHSPEED | MMC_CAP_SDIO_IRQ |
-			  MMC_CAP_CMD23,
-	.capabilities2	= MMC_CAP2_NO_WRITE_PROTECT,
-	.bus_shift	= 2,
-	.scc_offset	= 0x1000,
-	.taps		= rcar_gen3_scc_taps,
-	.taps_num	= ARRAY_SIZE(rcar_gen3_scc_taps),
-	/* DMAC can handle 32bit blk count but only 1 segment */
-	.max_blk_count	= UINT_MAX / TMIO_MAX_BLK_SIZE,
-	.max_segs	= 1,
 };
 
 static const struct renesas_sdhi_of_data of_rcar_gen3_compatible = {
@@ -108,6 +92,7 @@ static const struct renesas_sdhi_of_data of_rcar_gen3_compatible = {
 			  MMC_CAP_CMD23,
 	.capabilities2	= MMC_CAP2_NO_WRITE_PROTECT,
 	.bus_shift	= 2,
+	.mmc0_addr	= 0xee160000,
 	.scc_offset	= 0x1000,
 	.taps		= rcar_gen3_scc_taps,
 	.taps_num	= ARRAY_SIZE(rcar_gen3_scc_taps),
@@ -117,8 +102,6 @@ static const struct renesas_sdhi_of_data of_rcar_gen3_compatible = {
 };
 
 static const struct of_device_id renesas_sdhi_internal_dmac_of_match[] = {
-	{ .compatible = "renesas,sdhi-r8a7795", .data = &of_rcar_r8a7795_compatible, },
-	{ .compatible = "renesas,sdhi-r8a7796", .data = &of_rcar_r8a7795_compatible, },
 	{ .compatible = "renesas,rcar-gen3-sdhi", .data = &of_rcar_gen3_compatible, },
 	{},
 };
@@ -177,13 +160,8 @@ renesas_sdhi_internal_dmac_start_dma(struct tmio_mmc_host *host,
 	struct scatterlist *sg = host->sg_ptr;
 	u32 dtran_mode = DTRAN_MODE_BUS_WID_TH | DTRAN_MODE_ADDR_MODE;
 
-	if (!dma_map_sg(&host->pdev->dev, sg, host->sg_len,
-			mmc_get_dma_dir(data)))
+	if (!tmio_mmc_pre_dma_transfer(host, data, COOKIE_MAPPED))
 		goto force_pio;
-
-	/* This DMAC cannot handle if buffer is not 8-bytes alignment */
-	if (!IS_ALIGNED(sg_dma_address(sg), 8))
-		goto force_pio_with_unmap;
 
 	if (data->flags & MMC_DATA_READ) {
 		dtran_mode |= DTRAN_MODE_CH_NUM_CH1;
@@ -225,20 +203,17 @@ static void renesas_sdhi_internal_dmac_issue_tasklet_fn(unsigned long arg)
 
 static bool renesas_sdhi_internal_dmac_complete(struct tmio_mmc_host *host)
 {
-	enum dma_data_direction dir;
-
 	if (!host->data)
 		return false;
 
-	if (host->data->flags & MMC_DATA_READ)
-		dir = DMA_FROM_DEVICE;
-	else
-		dir = DMA_TO_DEVICE;
-
 	renesas_sdhi_internal_dmac_enable_dma(host, false);
-	dma_unmap_sg(&host->pdev->dev, host->sg_ptr, host->sg_len, dir);
+	if (host->data && host->data->host_cookie == COOKIE_MAPPED) {
+		dma_unmap_sg(&host->pdev->dev, host->sg_ptr, host->sg_len,
+				mmc_get_dma_dir(host->data));
+		host->data->host_cookie = COOKIE_UNMAPPED;
+	}
 
-	if (dir == DMA_FROM_DEVICE)
+	if (host->data->flags & MMC_DATA_READ)
 		clear_bit(SDHI_INTERNAL_DMAC_RX_IN_USE, &global_flags);
 
 	return true;
@@ -308,6 +283,7 @@ static const struct soc_device_attribute gen3_soc_whitelist[] = {
 	  .data = (void *)BIT(SDHI_INTERNAL_DMAC_ONE_RX_ONLY) },
 	/* generic ones */
 	{ .soc_id = "r8a774a1" },
+	{ .soc_id = "r8a774a3" },
 	{ .soc_id = "r8a774b1" },
 	{ .soc_id = "r8a774c0" },
 	{ .soc_id = "r8a774e1" },
@@ -336,7 +312,11 @@ static int renesas_sdhi_internal_dmac_probe(struct platform_device *pdev)
 	/* value is max of SD_SECCNT. Confirmed by HW engineers */
 	dma_set_max_seg_size(dev, 0xffffffff);
 
-	return renesas_sdhi_probe(pdev, &renesas_sdhi_internal_dmac_dma_ops);
+	#ifndef CONFIG_MMC_SDHI_PIO
+		return renesas_sdhi_probe(pdev, &renesas_sdhi_internal_dmac_dma_ops);
+	#else
+		return renesas_sdhi_probe(pdev, NULL);
+	#endif
 }
 
 static const struct dev_pm_ops renesas_sdhi_internal_dmac_dev_pm_ops = {

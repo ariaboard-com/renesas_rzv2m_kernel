@@ -72,6 +72,7 @@
 #define		OV5645_TEST_PATTERN_ENABLE	BIT(7)
 #define OV5645_SDE_SAT_U		0x5583
 #define OV5645_SDE_SAT_V		0x5584
+#define OV5645_REG_DEBUG_MODE		0x4814
 
 struct reg_value {
 	u16 reg;
@@ -117,6 +118,8 @@ struct ov5645 {
 
 	struct gpio_desc *enable_gpio;
 	struct gpio_desc *rst_gpio;
+
+	u8 virtual_channel;
 };
 
 static inline struct ov5645 *to_ov5645(struct v4l2_subdev *sd)
@@ -1038,12 +1041,34 @@ static int ov5645_get_selection(struct v4l2_subdev *sd,
 	return 0;
 }
 
+static int ov5645_set_virtual_channel(struct ov5645 *ov5645)
+{
+	u8 temp, channel = ov5645->virtual_channel;
+	int ret;
+
+	if (channel > 3)
+		return -EINVAL;
+
+	ret = ov5645_read_reg(ov5645, OV5645_REG_DEBUG_MODE, &temp);
+	if (ret)
+		return ret;
+
+	temp &= ~(3 << 6);
+	temp |= (channel << 6);
+
+	return ov5645_write_reg(ov5645, OV5645_REG_DEBUG_MODE, temp);
+}
+
 static int ov5645_s_stream(struct v4l2_subdev *subdev, int enable)
 {
 	struct ov5645 *ov5645 = to_ov5645(subdev);
 	int ret;
 
 	if (enable) {
+		ret = ov5645_set_virtual_channel(ov5645);
+		if (ret < 0)
+			return ret;
+
 		ret = ov5645_set_register_array(ov5645,
 					ov5645->current_mode->data,
 					ov5645->current_mode->data_size);
@@ -1062,18 +1087,8 @@ static int ov5645_s_stream(struct v4l2_subdev *subdev, int enable)
 		ret = ov5645_write_reg(ov5645, OV5645_IO_MIPI_CTRL00, 0x45);
 		if (ret < 0)
 			return ret;
-
-		ret = ov5645_write_reg(ov5645, OV5645_SYSTEM_CTRL0,
-				       OV5645_SYSTEM_CTRL0_START);
-		if (ret < 0)
-			return ret;
 	} else {
 		ret = ov5645_write_reg(ov5645, OV5645_IO_MIPI_CTRL00, 0x40);
-		if (ret < 0)
-			return ret;
-
-		ret = ov5645_write_reg(ov5645, OV5645_SYSTEM_CTRL0,
-				       OV5645_SYSTEM_CTRL0_STOP);
 		if (ret < 0)
 			return ret;
 	}
@@ -1112,6 +1127,7 @@ static int ov5645_probe(struct i2c_client *client,
 	struct ov5645 *ov5645;
 	u8 chip_id_high, chip_id_low;
 	u32 xclk_freq;
+	u8 virtual_channel;
 	int ret;
 
 	ov5645 = devm_kzalloc(dev, sizeof(struct ov5645), GFP_KERNEL);
@@ -1221,6 +1237,12 @@ static int ov5645_probe(struct i2c_client *client,
 		dev_err(dev, "cannot get reset gpio\n");
 		return PTR_ERR(ov5645->rst_gpio);
 	}
+
+	if (!of_property_read_u8(dev->of_node, "virtual-channel",
+							&virtual_channel))
+		ov5645->virtual_channel = virtual_channel;
+	else
+		ov5645->virtual_channel = 0;
 
 	mutex_init(&ov5645->power_lock);
 

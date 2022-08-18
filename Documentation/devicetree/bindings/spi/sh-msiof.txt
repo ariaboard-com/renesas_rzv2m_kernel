@@ -3,7 +3,8 @@ Renesas MSIOF spi controller
 Required properties:
 - compatible           : "renesas,msiof-r8a7743" (RZ/G1M)
 			 "renesas,msiof-r8a7745" (RZ/G1E)
-			 "renesas,msiof-r8a774a1" (RZ/G2M)
+			 "renesas,msiof-r8a774a1" (RZ/G2M v1.3)
+			 "renesas,msiof-r8a774a3" (RZ/G2M v3.0)
 			 "renesas,msiof-r8a774b1" (RZ/G2N)
 			 "renesas,msiof-r8a774c0" (RZ/G2E)
 			 "renesas,msiof-r8a774e1" (RZ/G2H)
@@ -38,7 +39,9 @@ Required properties:
 - #size-cells          : Must be <0>
 
 Optional properties:
-- clocks               : Must contain a reference to the functional clock.
+- clocks               : Specify a clock handling and a module clock.
+			 If HW supports the change of module clock, specify the module clock.
+			 Otherwise, not specify the module clock.
 - num-cs               : Total number of chip selects (default is 1).
 			 Up to 3 native chip selects are supported:
 			   0: MSIOF_SYNC

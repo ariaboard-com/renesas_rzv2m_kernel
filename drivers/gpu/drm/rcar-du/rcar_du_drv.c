@@ -141,7 +141,8 @@ static const struct rcar_du_device_info rcar_du_r8a774b1_info = {
 static const struct rcar_du_device_info rcar_du_r8a774c0_info = {
 	.gen = 3,
 	.features = RCAR_DU_FEATURE_CRTC_IRQ_CLOCK
-		  | RCAR_DU_FEATURE_VSP1_SOURCE,
+		  | RCAR_DU_FEATURE_VSP1_SOURCE
+		  | RCAR_DU_FEATURE_INTERLACED,
 	.channels_mask = BIT(1) | BIT(0),
 	.routes = {
 		/*
@@ -423,6 +424,7 @@ static const struct of_device_id rcar_du_of_table[] = {
 	{ .compatible = "renesas,du-r8a7743", .data = &rzg1_du_r8a7743_info },
 	{ .compatible = "renesas,du-r8a7745", .data = &rzg1_du_r8a7745_info },
 	{ .compatible = "renesas,du-r8a774a1", .data = &rcar_du_r8a774a1_info },
+	{ .compatible = "renesas,du-r8a774a3", .data = &rcar_du_r8a774a1_info },
 	{ .compatible = "renesas,du-r8a774b1", .data = &rcar_du_r8a774b1_info },
 	{ .compatible = "renesas,du-r8a774c0", .data = &rcar_du_r8a774c0_info },
 	{ .compatible = "renesas,du-r8a774e1", .data = &rcar_du_r8a774e1_info },

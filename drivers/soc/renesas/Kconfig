@@ -3,14 +3,15 @@ config SOC_RENESAS
 	default y if ARCH_RENESAS
 	select SOC_BUS
 	select RST_RCAR if ARCH_RCAR_GEN1 || ARCH_RCAR_GEN2 || \
-			   ARCH_R8A774A1 || ARCH_R8A774B1 || ARCH_R8A774C0 || \
-			   ARCH_R8A774E1 || ARCH_R8A7795 || ARCH_R8A7796 || \
-			   ARCH_R8A77965 || ARCH_R8A77970 || ARCH_R8A77980 || \
-			   ARCH_R8A77990 || ARCH_R8A77995
+			   ARCH_R8A774A1 || ARCH_R8A774A3 || ARCH_R8A774B1 || \
+			   ARCH_R8A774C0 || ARCH_R8A774E1 || ARCH_R8A7795 || \
+			   ARCH_R8A7796  || ARCH_R8A77965 || ARCH_R8A77970 || \
+			   ARCH_R8A77980 || ARCH_R8A77990 || ARCH_R8A77995
 	select SYSC_R8A7743 if ARCH_R8A7743
 	select SYSC_R8A7745 if ARCH_R8A7745
 	select SYSC_R8A77470 if ARCH_R8A77470
 	select SYSC_R8A774A1 if ARCH_R8A774A1
+	select SYSC_R8A774A3 if ARCH_R8A774A3
 	select SYSC_R8A774B1 if ARCH_R8A774B1
 	select SYSC_R8A774C0 if ARCH_R8A774C0
 	select SYSC_R8A774E1 if ARCH_R8A774E1
@@ -26,6 +27,14 @@ config SOC_RENESAS
 	select SYSC_R8A77980 if ARCH_R8A77980
 	select SYSC_R8A77990 if ARCH_R8A77990
 	select SYSC_R8A77995 if ARCH_R8A77995
+
+config RCAR_CPU_TOPOLOGY
+	depends on (ARCH_R8A7795 || ARCH_R8A7796 || \
+		    ARCH_R8A774A1 || ARCH_R8A774A3 || ARCH_R8A774E1)
+	bool "R-Car CPU Topology"
+	default y
+	help
+	 This enables the capacity awareness feature for R-Car series.
 
 if SOC_RENESAS
 
@@ -43,7 +52,11 @@ config SYSC_R8A77470
 	select SYSC_RCAR
 
 config SYSC_R8A774A1
-	bool "RZ/G2M System Controller support" if COMPILE_TEST
+	bool "RZ/G2M v1.3 System Controller support" if COMPILE_TEST
+	select SYSC_RCAR
+
+config SYSC_R8A774A3
+	bool "RZ/G2M v3.0 System Controller support" if COMPILE_TEST
 	select SYSC_RCAR
 
 config SYSC_R8A774B1
@@ -112,5 +125,15 @@ config RST_RCAR
 
 config SYSC_RCAR
 	bool "R-Car System Controller support" if COMPILE_TEST
+
+#
+# Renesas SoC drivers
+#
+config RCAR_THERMAL_EMS_ENABLED
+	tristate "Renesas R-Car Gen3 Enable Emergency Shutdown"
+	depends on RCAR_GEN3_THERMAL || RCAR_THERMAL
+	help
+	 Enable this option if you want to have support for Emergency Shutdown
+	 in R-Car Gen3.
 
 endif # SOC_RENESAS

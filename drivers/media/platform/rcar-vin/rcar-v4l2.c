@@ -31,6 +31,10 @@
 
 static const struct rvin_video_format rvin_formats[] = {
 	{
+		.fourcc			= V4L2_PIX_FMT_NV12,
+		.bpp			= 1,
+	},
+	{
 		.fourcc			= V4L2_PIX_FMT_NV16,
 		.bpp			= 1,
 	},
@@ -47,12 +51,20 @@ static const struct rvin_video_format rvin_formats[] = {
 		.bpp			= 2,
 	},
 	{
-		.fourcc			= V4L2_PIX_FMT_XRGB555,
+		.fourcc			= V4L2_PIX_FMT_ARGB555,
 		.bpp			= 2,
+	},
+	{
+		.fourcc			= V4L2_PIX_FMT_ABGR32,
+		.bpp			= 4,
 	},
 	{
 		.fourcc			= V4L2_PIX_FMT_XBGR32,
 		.bpp			= 4,
+	},
+	{
+		.fourcc			= V4L2_PIX_FMT_SRGGB8,
+		.bpp			= 1,
 	},
 };
 
@@ -83,6 +95,9 @@ static u32 rvin_format_sizeimage(struct v4l2_pix_format *pix)
 {
 	if (pix->pixelformat == V4L2_PIX_FMT_NV16)
 		return pix->bytesperline * pix->height * 2;
+
+	if (pix->pixelformat == V4L2_PIX_FMT_NV12)
+		return pix->bytesperline * pix->height * 3 / 2;
 
 	return pix->bytesperline * pix->height;
 }
@@ -119,7 +134,8 @@ static void rvin_format_align(struct rvin_dev *vin, struct v4l2_pix_format *pix)
 	}
 
 	/* HW limit width to a multiple of 32 (2^5) for NV16 else 2 (2^1) */
-	walign = vin->format.pixelformat == V4L2_PIX_FMT_NV16 ? 5 : 1;
+	walign = vin->format.pixelformat ==
+			(V4L2_PIX_FMT_NV16 || V4L2_PIX_FMT_NV12) ? 5 : 1;
 
 	/* Limit to VIN capabilities */
 	v4l_bound_align_image(&pix->width, 2, vin->info->max_width, walign,
@@ -234,6 +250,41 @@ done:
 	return ret;
 }
 
+static int rvin_get_sd_format(struct rvin_dev *vin, struct v4l2_pix_format *pix)
+{
+	struct v4l2_subdev *sd;
+	struct media_pad *pad;
+	struct v4l2_subdev_format fmt = {
+		.which = V4L2_SUBDEV_FORMAT_ACTIVE,
+	};
+
+	/* Get cropping size */
+	pad = media_entity_remote_pad(&vin->pad);
+	if (!pad)
+		return -EPIPE;
+
+	sd = media_entity_to_v4l2_subdev(pad->entity);
+	if (!sd)
+		return -EPIPE;
+
+	if (v4l2_subdev_call(sd, pad, get_fmt, NULL, &fmt))
+		return -EPIPE;
+
+	vin->source.width = pix->width = fmt.format.width;
+	vin->source.height = pix->height = fmt.format.height;
+	vin->crop = vin->source;
+
+	if (fmt.format.field == V4L2_FIELD_ALTERNATE)
+		vin->format.field = V4L2_FIELD_INTERLACED;
+	else
+		vin->format.field = fmt.format.field;
+
+	vin->format.bytesperline =
+	rvin_format_bytesperline(&vin->format);
+
+	return 0;
+}
+
 static int rvin_querycap(struct file *file, void *priv,
 			 struct v4l2_capability *cap)
 {
@@ -303,6 +354,7 @@ static int rvin_g_selection(struct file *file, void *fh,
 			    struct v4l2_selection *s)
 {
 	struct rvin_dev *vin = video_drvdata(file);
+	int ret;
 
 	if (s->type != V4L2_BUF_TYPE_VIDEO_CAPTURE)
 		return -EINVAL;
@@ -310,6 +362,11 @@ static int rvin_g_selection(struct file *file, void *fh,
 	switch (s->target) {
 	case V4L2_SEL_TGT_CROP_BOUNDS:
 	case V4L2_SEL_TGT_CROP_DEFAULT:
+		if (vin->info->use_mc) {
+			ret = rvin_get_sd_format(vin, &vin->format);
+			if (ret)
+				return ret;
+		}
 		s->r.left = s->r.top = 0;
 		s->r.width = vin->source.width;
 		s->r.height = vin->source.height;
@@ -695,15 +752,13 @@ static int rvin_mc_s_fmt_vid_cap(struct file *file, void *priv,
 	if (vb2_is_busy(&vin->queue))
 		return -EBUSY;
 
+	vin->compose.top = vin->compose.left = 0;
+	vin->compose.width = f->fmt.pix.width;
+	vin->compose.height = f->fmt.pix.height;
+
 	rvin_mc_try_format(vin, &f->fmt.pix);
 
 	vin->format = f->fmt.pix;
-
-	vin->crop.top = 0;
-	vin->crop.left = 0;
-	vin->crop.width = vin->format.width;
-	vin->crop.height = vin->format.height;
-	vin->compose = vin->crop;
 
 	return 0;
 }
@@ -726,6 +781,9 @@ static const struct v4l2_ioctl_ops rvin_mc_ioctl_ops = {
 	.vidioc_g_fmt_vid_cap		= rvin_g_fmt_vid_cap,
 	.vidioc_s_fmt_vid_cap		= rvin_mc_s_fmt_vid_cap,
 	.vidioc_enum_fmt_vid_cap	= rvin_enum_fmt_vid_cap,
+
+	.vidioc_g_selection		= rvin_g_selection,
+	.vidioc_s_selection		= rvin_s_selection,
 
 	.vidioc_enum_input		= rvin_mc_enum_input,
 	.vidioc_g_input			= rvin_g_input,
@@ -905,6 +963,8 @@ static int rvin_mc_open(struct file *file)
 	ret = pm_runtime_get_sync(vin->dev);
 	if (ret < 0)
 		goto err_unlock;
+
+	rvin_get_sd_format(vin, &vin->format);
 
 	ret = v4l2_pipeline_pm_use(&vin->vdev.entity, 1);
 	if (ret < 0)

@@ -134,6 +134,8 @@ struct sh_msiof_spi_priv {
 #define CTR_TFSE	0x00004000 /* Transmit Frame Sync Signal Output Enable */
 #define CTR_TXE		0x00000200 /* Transmit Enable */
 #define CTR_RXE		0x00000100 /* Receive Enable */
+#define CTR_TXRST	0x00000002 /* Transmit Reset */
+#define CTR_RXRST	0x00000001 /* Receive Reset */
 
 /* FCTR */
 #define FCTR_TFWM_MASK	0xe0000000 /* Transmit FIFO Watermark */
@@ -248,6 +250,25 @@ static irqreturn_t sh_msiof_spi_irq(int irq, void *data)
 	complete(&p->done);
 
 	return IRQ_HANDLED;
+}
+
+static void sh_msiof_spi_reset_regs(struct sh_msiof_spi_priv *p)
+{
+	u32 mask = CTR_TXRST | CTR_RXRST;
+	u32 data;
+	int k;
+
+	data = sh_msiof_read(p, CTR);
+	data |= mask;
+
+	sh_msiof_write(p, CTR, data);
+
+	for (k = 100; k > 0; k--) {
+		if (!(sh_msiof_read(p, CTR) & mask))
+			break;
+
+		udelay(1);
+	}
 }
 
 static const u32 sh_msiof_spi_div_array[] = {
@@ -929,6 +950,9 @@ static int sh_msiof_transfer_one(struct spi_master *master,
 	bool swab;
 	int ret;
 
+	/* reset registers */
+	sh_msiof_spi_reset_regs(p);
+
 	/* setup clocks (clock already enabled in chipselect()) */
 	if (!spi_controller_is_slave(p->master))
 		sh_msiof_spi_set_clk_regs(p, clk_get_rate(p->clk), t->speed_hz);
@@ -1299,6 +1323,8 @@ static int sh_msiof_spi_probe(struct platform_device *pdev)
 	const struct sh_msiof_chipdata *chipdata;
 	struct sh_msiof_spi_info *info;
 	struct sh_msiof_spi_priv *p;
+	struct clk *ref_clk;
+	u32 clk_rate = 0;
 	int i;
 	int ret;
 
@@ -1400,6 +1426,17 @@ static int sh_msiof_spi_probe(struct platform_device *pdev)
 	if (ret < 0) {
 		dev_err(&pdev->dev, "spi_register_master error.\n");
 		goto err2;
+	}
+
+	/* MSIOF module clock setup */
+	ref_clk = devm_clk_get(&pdev->dev, "msiof_ref_clk");
+	if (!IS_ERR(ref_clk)) {
+		clk_rate = clk_get_rate(ref_clk);
+		if (clk_rate) {
+			clk_prepare_enable(p->clk);
+			clk_set_rate(p->clk, clk_rate);
+			clk_disable_unprepare(p->clk);
+		}
 	}
 
 	return 0;

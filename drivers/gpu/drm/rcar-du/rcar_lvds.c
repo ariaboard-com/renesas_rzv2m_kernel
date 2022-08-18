@@ -368,6 +368,9 @@ int rcar_lvds_clk_enable(struct drm_bridge *bridge, unsigned long freq)
 	struct rcar_lvds *lvds = bridge_to_rcar_lvds(bridge);
 	int ret;
 
+	if (lvds->link_type != RCAR_LVDS_SINGLE_LINK && lvds->companion)
+		lvds = bridge_to_rcar_lvds(lvds->companion);
+
 	if (WARN_ON(!(lvds->info->quirks & RCAR_LVDS_QUIRK_EXT_PLL)))
 		return -ENODEV;
 
@@ -386,6 +389,9 @@ EXPORT_SYMBOL_GPL(rcar_lvds_clk_enable);
 void rcar_lvds_clk_disable(struct drm_bridge *bridge)
 {
 	struct rcar_lvds *lvds = bridge_to_rcar_lvds(bridge);
+
+	if (lvds->link_type != RCAR_LVDS_SINGLE_LINK && lvds->companion)
+		lvds = bridge_to_rcar_lvds(lvds->companion);
 
 	if (WARN_ON(!(lvds->info->quirks & RCAR_LVDS_QUIRK_EXT_PLL)))
 		return;
@@ -951,6 +957,7 @@ static const struct rcar_lvds_device_info rcar_lvds_r8a77995_info = {
 static const struct of_device_id rcar_lvds_of_table[] = {
 	{ .compatible = "renesas,r8a7743-lvds", .data = &rcar_lvds_gen2_info },
 	{ .compatible = "renesas,r8a774a1-lvds", .data = &rcar_lvds_gen3_info },
+	{ .compatible = "renesas,r8a774a3-lvds", .data = &rcar_lvds_gen3_info },
 	{ .compatible = "renesas,r8a774b1-lvds", .data = &rcar_lvds_gen3_info },
 	{ .compatible = "renesas,r8a774c0-lvds", .data = &rcar_lvds_r8a77990_info },
 	{ .compatible = "renesas,r8a774e1-lvds", .data = &rcar_lvds_gen3_info },
