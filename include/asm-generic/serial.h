@@ -9,6 +9,10 @@
  * that have this clock rate.
  */
 
+#if defined(CONFIG_ARCH_R9A09G011GBG)
+       #define BASE_BAUD (48000000 / 16)
+#else  /* defined(CONFIG_ARCH_R9A09G011GBG) */
 #define BASE_BAUD (1843200 / 16)
+#endif /* defined(CONFIG_ARCH_R9A09G011GBG) */
 
 #endif /* __ASM_GENERIC_SERIAL_H */

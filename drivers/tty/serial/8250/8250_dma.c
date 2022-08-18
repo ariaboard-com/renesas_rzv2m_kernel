@@ -8,6 +8,9 @@
 #include <linux/tty_flip.h>
 #include <linux/serial_reg.h>
 #include <linux/dma-mapping.h>
+#if defined(CONFIG_ARCH_R9A09G011GBG)
+#include <linux/console.h>
+#endif /* defined(CONFIG_ARCH_R9A09G011GBG) */
 
 #include "8250.h"
 
@@ -49,6 +52,11 @@ static void __dma_rx_complete(void *param)
 	struct tty_port		*tty_port = &p->port.state->port;
 	struct dma_tx_state	state;
 	int			count;
+
+#if defined(CONFIG_ARCH_R9A09G011GBG)
+       if (!dma->rx_running)
+               return;
+#endif /* defined(CONFIG_ARCH_R9A09G011GBG) */
 
 	dma->rx_running = 0;
 	dmaengine_tx_status(dma->rxchan, dma->rx_cookie, &state);

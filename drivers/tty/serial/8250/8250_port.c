@@ -114,6 +114,18 @@ static const struct serial8250_config uart_config[] = {
 		.rxtrig_bytes	= {8, 16, 24, 28},
 		.flags		= UART_CAP_FIFO | UART_CAP_EFR | UART_CAP_SLEEP,
 	},
+#if defined(CONFIG_ARCH_R9A09G011GBG)
+       [PORT_16750] = {
+               .name           = "R8ARZV2M16750",
+               .fifo_size      = 64,
+               .tx_loadsz      = 64,
+               .fcr            = UART_FCR_ENABLE_FIFO | UART_FCR_R_TRIG_10 |
+                                 UART_FCR7_64BYTE | UART_FCR_DMA_SELECT,
+               .rxtrig_bytes   = {1, 16, 32, 56},
+               .flags          = UART_CAP_FIFO | UART_CAP_AFE,
+       },
+#else  /* defined(CONFIG_ARCH_R9A09G011GBG) */
+
 	[PORT_16750] = {
 		.name		= "TI16750",
 		.fifo_size	= 64,
@@ -123,6 +135,7 @@ static const struct serial8250_config uart_config[] = {
 		.rxtrig_bytes	= {1, 16, 32, 56},
 		.flags		= UART_CAP_FIFO | UART_CAP_SLEEP | UART_CAP_AFE,
 	},
+#endif /* defined(CONFIG_ARCH_R9A09G011GBG) */
 	[PORT_STARTECH] = {
 		.name		= "Startech",
 		.fifo_size	= 1,
@@ -456,6 +469,9 @@ static void io_serial_out(struct uart_port *p, int offset, int value)
 }
 
 static int serial8250_default_handle_irq(struct uart_port *port);
+#if defined(CONFIG_ARCH_R9A09G011GBG)
+static int fcr_get_rxtrig_bytes(struct uart_8250_port *up);
+#endif /* defined(CONFIG_ARCH_R9A09G011GBG) */
 
 static void set_io_from_upio(struct uart_port *p)
 {
@@ -525,6 +541,33 @@ serial_port_out_sync(struct uart_port *p, int offset, int value)
 		p->serial_out(p, offset, value);
 	}
 }
+
+#if defined(CONFIG_ARCH_R9A09G011GBG)
+/*
+ * For the RZV2M
+ */
+static void serial8250_clear_internal_macro(struct uart_8250_port *up)
+{
+       unsigned int ier, fcr, lcr, mcr, hcr0;
+
+       ier = serial_in(up, UART_IER);
+       fcr = serial_in(up, UART_FCR);
+       lcr = serial_in(up, UART_LCR);
+       mcr = serial_in(up, UART_MCR);
+       hcr0 = serial_in(up, UART_HCR0);
+
+       serial_out(up, UART_FCR,
+               fcr | UART_FCR_CLEAR_RCVR | UART_FCR_CLEAR_XMIT);
+       serial_out(up, UART_HCR0, hcr0 | UART_HCR0_SWRST);
+       serial_out(up, UART_HCR0, hcr0 & ~UART_HCR0_SWRST);
+
+       serial_out(up, UART_IER, ier);
+       serial_out(up, UART_FCR, fcr);
+       serial_out(up, UART_LCR, lcr);
+       serial_out(up, UART_MCR, mcr);
+       serial_out(up, UART_HCR0, hcr0);
+}
+#endif /* defined(CONFIG_ARCH_R9A09G011GBG) */
 
 /*
  * For the 16C950
@@ -1007,6 +1050,14 @@ static void autoconfig_16550a(struct uart_8250_port *up)
 {
 	unsigned char status1, status2;
 	unsigned int iersave;
+
+#if defined(CONFIG_ARCH_R9A09G011GBG)
+       if (IS_ENABLED(CONFIG_ARCH_R9A09G011GBG)) {
+               up->port.type = PORT_16750;
+               up->capabilities |= UART_CAP_FIFO | UART_CAP_AFE;
+               return;
+       }
+#endif /* defined(CONFIG_ARCH_R9A09G011GBG) */
 
 	up->port.type = PORT_16550A;
 	up->capabilities |= UART_CAP_FIFO;
@@ -1701,6 +1752,10 @@ void serial8250_read_char(struct uart_8250_port *up, unsigned char lsr)
 
 	port->icount.rx++;
 
+#if defined(CONFIG_ARCH_R9A09G011GBG)
+        lsr |= (serial_in(up, UART_LSR) & 0x9C);
+#endif /* defined(CONFIG_ARCH_R9A09G011GBG) */
+
 	lsr |= up->lsr_saved_flags;
 	up->lsr_saved_flags = 0;
 
@@ -1999,6 +2054,9 @@ void serial8250_do_set_mctrl(struct uart_port *port, unsigned int mctrl)
 		mcr |= UART_MCR_OUT2;
 	if (mctrl & TIOCM_LOOP)
 		mcr |= UART_MCR_LOOP;
+#if defined(CONFIG_ARCH_R9A09G011GBG)
+               serial8250_clear_internal_macro(up);
+#endif /* defined(CONFIG_ARCH_R9A09G011GBG) */
 
 	mcr = (mcr & up->mcr_mask) | up->mcr_force | up->mcr;
 
@@ -2131,6 +2189,10 @@ int serial8250_do_startup(struct uart_port *port)
 	unsigned long flags;
 	unsigned char lsr, iir;
 	int retval;
+
+#if defined(CONFIG_ARCH_R9A09G011GBG)
+       serial8250_clear_internal_macro(up);
+#endif /* defined(CONFIG_ARCH_R9A09G011GBG) */
 
 	if (!port->fifosize)
 		port->fifosize = uart_config[port->type].fifo_size;
@@ -2389,6 +2451,13 @@ dont_test_tx_en:
 	 * Request DMA channels for both RX and TX.
 	 */
 	if (up->dma) {
+#if defined(CONFIG_ARCH_R9A09G011GBG)
+                serial_port_out(port, UART_HCR0,
+                        serial_port_in(port, UART_HCR0) | UART_HCR0_RTDRD |
+                                UART_HCR0_RDE | UART_HCR0_TDE);
+                up->dma->rx_size = fcr_get_rxtrig_bytes(up);
+#endif /* defined(CONFIG_ARCH_R9A09G011GBG) */
+
 		retval = serial8250_request_dma(up);
 		if (retval) {
 			pr_warn_ratelimited("%s - failed to request DMA\n",
@@ -2460,9 +2529,13 @@ void serial8250_do_shutdown(struct uart_port *port)
 	/*
 	 * Disable break condition and FIFOs
 	 */
+#if defined(CONFIG_ARCH_R9A09G011GBG)
+        serial8250_clear_internal_macro(up);
+#else  /* defined(CONFIG_ARCH_R9A09G011GBG) */
 	serial_port_out(port, UART_LCR,
 			serial_port_in(port, UART_LCR) & ~UART_LCR_SBC);
 	serial8250_clear_fifos(up);
+#endif /* defined(CONFIG_ARCH_R9A09G011GBG) */
 
 #ifdef CONFIG_SERIAL_8250_RSA
 	/*
@@ -2667,6 +2740,10 @@ serial8250_do_set_termios(struct uart_port *port, struct ktermios *termios,
 	unsigned long flags;
 	unsigned int baud, quot, frac = 0;
 
+#if defined(CONFIG_ARCH_R9A09G011GBG)
+       serial8250_clear_internal_macro(up);
+#endif /* defined(CONFIG_ARCH_R9A09G011GBG) */
+
 	if (up->capabilities & UART_CAP_MINI) {
 		termios->c_cflag &= ~(CSTOPB | PARENB | PARODD | CMSPAR);
 		if ((termios->c_cflag & CSIZE) == CS5 ||
@@ -2704,6 +2781,11 @@ serial8250_do_set_termios(struct uart_port *port, struct ktermios *termios,
 		up->mcr &= ~UART_MCR_AFE;
 		if (termios->c_cflag & CRTSCTS)
 			up->mcr |= UART_MCR_AFE;
+#if defined(CONFIG_ARCH_R9A09G011GBG)
+                       serial_port_out(port, UART_HCR0,
+                               serial_port_in(port, UART_HCR0) |
+                               UART_HCR0_RM);
+#endif /* defined(CONFIG_ARCH_R9A09G011GBG) */
 	}
 
 	/*
@@ -3333,6 +3415,10 @@ int serial8250_console_setup(struct uart_port *port, char *options, bool probe)
 
 	if (!port->iobase && !port->membase)
 		return -ENODEV;
+
+#if defined(CONFIG_ARCH_R9A09G011GBG)
+       serial8250_clear_internal_macro(up_to_u8250p(port));
+#endif /* defined(CONFIG_ARCH_R9A09G011GBG) */
 
 	if (options)
 		uart_parse_options(options, &baud, &parity, &bits, &flow);

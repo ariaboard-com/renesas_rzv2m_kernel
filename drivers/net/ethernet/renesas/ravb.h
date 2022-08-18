@@ -959,6 +959,7 @@ enum RAVB_QUEUE {
 #define RX_QUEUE_OFFSET	4
 #define NUM_RX_QUEUE	2
 #define NUM_TX_QUEUE	2
+#define BANK_SETTING BIT(32)  /* 34bit extension for rzv2m(add bank address with bit32 ) */
 
 /* TX descriptors per packet */
 #define NUM_TX_DESC_GEN2	2

@@ -32,10 +32,9 @@
 #include <linux/mfd/tmio.h>
 #include <linux/sh_dma.h>
 #include <linux/delay.h>
-#include <linux/pinctrl/consumer.h>
-#include <linux/pinctrl/pinctrl-state.h>
 #include <linux/regulator/consumer.h>
 #include <linux/sys_soc.h>
+#include <linux/dma-mapping.h>
 
 #include "renesas_sdhi.h"
 #include "tmio_mmc.h"
@@ -48,6 +47,46 @@
 #define SDHI_VER_GEN2_SDR104	0xcb0d
 #define SDHI_VER_GEN3_SD	0xcc10
 #define SDHI_VER_GEN3_SDMMC	0xcd10
+
+#define B2REG_PSC_BASE_ADDR     (0x00000000A3700000ULL)
+#define B2REG_PSC_SDSEL_OFSET   (0x0080)
+
+#define MAX_CHIP_NAME_SIZE     (20)
+#define RZV2M_DEVICE_NAME_SD0  "85000000.sd"
+#define RZV2M_DEVICE_NAME_SD1  "85010000.sd"
+#define RZV2M_DEVICE_NAME_EMMC "85020000.sd"
+
+
+#define PSC_SEL_SD0                    (0)  //SD0 select
+#define PSC_SEL_SD1                    (1)  //SD1 select
+
+#define        PSC_REG_SD_3_3V         (0)
+#define        PSC_REG_SD_1_8V         (1)
+
+
+
+enum switching_voltage_mode{
+       psc_mode,
+       none,
+};
+
+static int psc_voltage_switch(uint32_t pins, uint8_t voltage)
+{
+
+    uint32_t data;
+       void __iomem * remap_addr;
+
+       remap_addr = ioremap(B2REG_PSC_BASE_ADDR,sizeof(*remap_addr));
+       if (!remap_addr) {
+        return -EINVAL;
+    }
+
+       data = (voltage << pins) | BIT((pins+16));
+       writel(data , remap_addr + B2REG_PSC_SDSEL_OFSET);
+       iounmap(remap_addr);
+
+       return 0;
+}
 
 static void renesas_sdhi_sdbuf_width(struct tmio_mmc_host *host, int width)
 {
@@ -177,33 +216,26 @@ static int renesas_sdhi_start_signal_voltage_switch(struct mmc_host *mmc,
 {
 	struct tmio_mmc_host *host = mmc_priv(mmc);
 	struct renesas_sdhi *priv = host_to_priv(host);
-	struct pinctrl_state *pin_state;
-	int ret;
+       u8 psc_state;
 
-	switch (ios->signal_voltage) {
-	case MMC_SIGNAL_VOLTAGE_330:
-		pin_state = priv->pins_default;
-		break;
-	case MMC_SIGNAL_VOLTAGE_180:
-		pin_state = priv->pins_uhs;
-		break;
-	default:
-		return -EINVAL;
-	}
+       if(priv->switching_volt_type == psc_mode){
+               switch (ios->signal_voltage) {
+               case MMC_SIGNAL_VOLTAGE_330:
+                               psc_state = PSC_REG_SD_3_3V;
+                       break;
+               case MMC_SIGNAL_VOLTAGE_180:
+                               psc_state = PSC_REG_SD_1_8V;
+                       break;
+               default:
+                       return -EINVAL;
+               }
+               return psc_voltage_switch(priv->psc_pins, psc_state);
+       }
+       else{
+               //The voltage of eMMC is fixed at 1.8V.
+       }
 
-	/*
-	 * If anything is missing, assume signal voltage is fixed at
-	 * 3.3V and succeed/fail accordingly.
-	 */
-	if (IS_ERR(priv->pinctrl) || IS_ERR(pin_state))
-		return ios->signal_voltage ==
-			MMC_SIGNAL_VOLTAGE_330 ? 0 : -EINVAL;
-
-	ret = mmc_regulator_set_vqmmc(host->mmc, ios);
-	if (ret)
-		return ret;
-
-	return pinctrl_select_state(priv->pinctrl, pin_state);
+       return 0;
 }
 
 /* SCC registers */
@@ -852,6 +884,7 @@ int renesas_sdhi_probe(struct platform_device *pdev,
 	struct resource *res;
 	int irq, ret, i;
 	u16 ver;
+        u32 psc_pins = 0;
 	int port_num_offset = 0;
 
 	of_data = of_device_get_match_data(&pdev->dev);
@@ -869,6 +902,7 @@ int renesas_sdhi_probe(struct platform_device *pdev,
 	if (!priv)
 		return -ENOMEM;
 
+	dma_set_mask_and_coherent(&pdev->dev,DMA_BIT_MASK(34));  //34bit extension for rzv2m
 	priv->quirks = quirks;
 	mmc_data = &priv->mmc_data;
 	dma_priv = &priv->dma_priv;
@@ -895,12 +929,21 @@ int renesas_sdhi_probe(struct platform_device *pdev,
 	if (IS_ERR(priv->clk_cd))
 		priv->clk_cd = NULL;
 
-	priv->pinctrl = devm_pinctrl_get(&pdev->dev);
-	if (!IS_ERR(priv->pinctrl)) {
-		priv->pins_default = pinctrl_lookup_state(priv->pinctrl,
-						PINCTRL_STATE_DEFAULT);
-		priv->pins_uhs = pinctrl_lookup_state(priv->pinctrl,
-						"state_uhs");
+       /* Voltage switching type depends on the soc_id.
+        * If the soc_device_match finds a soc_id, it run power slaveport control mode.
+        * If you use pin function control unit, do not write a soc_id to whitelist.
+        */
+       if (strncmp(pdev->name, RZV2M_DEVICE_NAME_SD0, strlen(RZV2M_DEVICE_NAME_SD0)) == 0) {
+               priv->psc_pins = PSC_SEL_SD0;
+               priv->switching_volt_type = psc_mode;
+       }
+       else if (strncmp(pdev->name, RZV2M_DEVICE_NAME_SD1, strlen(RZV2M_DEVICE_NAME_SD1)) == 0) {
+               priv->psc_pins = PSC_SEL_SD1;
+               priv->switching_volt_type = psc_mode;
+       }
+       else{
+               //The voltage of eMMC is fixed at 1.8V.
+               priv->switching_volt_type = none;
 	}
 
 	host = tmio_mmc_host_alloc(pdev, mmc_data);

@@ -38,16 +38,16 @@
 #define USB3_USB20_CON		0x204
 #define USB3_USB30_CON		0x208
 #define USB3_USB_STA		0x210
-#define USB3_DRD_CON		0x218
+#define USB3_DRD_CON            0x218
 #define USB3_USB_INT_STA_1	0x220
 #define USB3_USB_INT_STA_2	0x224
 #define USB3_USB_INT_ENA_1	0x228
 #define USB3_USB_INT_ENA_2	0x22c
 #define USB3_STUP_DAT_0		0x230
 #define USB3_STUP_DAT_1		0x234
-#define USB3_USB_OTG_STA	0x268
-#define USB3_USB_OTG_INT_STA	0x26c
-#define USB3_USB_OTG_INT_ENA	0x270
+#define USB3_USB_OTG_STA       0x268
+#define USB3_USB_OTG_INT_STA   0x26c
+#define USB3_USB_OTG_INT_ENA   0x270
 #define USB3_P0_MOD		0x280
 #define USB3_P0_CON		0x288
 #define USB3_P0_STA		0x28c
@@ -155,7 +155,7 @@
 #define USB_INT_2_PIPE(n)	BIT(n)
 
 /* USB_OTG_STA, USB_OTG_INT_STA and USB_OTG_INT_ENA */
-#define USB_OTG_IDMON		BIT(4)
+#define USB_OTG_IDMON           BIT(4)
 
 /* P0_MOD */
 #define P0_MOD_DIR		BIT(6)

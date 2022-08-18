@@ -103,6 +103,7 @@ static const struct renesas_sdhi_of_data of_rcar_gen3_compatible = {
 
 static const struct of_device_id renesas_sdhi_internal_dmac_of_match[] = {
 	{ .compatible = "renesas,rcar-gen3-sdhi", .data = &of_rcar_gen3_compatible, },
+        { .compatible = "renesas,rzv2m-sdhi", .data = &of_rcar_gen3_compatible, },
 	{},
 };
 MODULE_DEVICE_TABLE(of, renesas_sdhi_internal_dmac_of_match);
@@ -287,6 +288,7 @@ static const struct soc_device_attribute gen3_soc_whitelist[] = {
 	{ .soc_id = "r8a774b1" },
 	{ .soc_id = "r8a774c0" },
 	{ .soc_id = "r8a774e1" },
+        { .soc_id = "r9a09g011gbg" },
 	{ .soc_id = "r8a7795" },
 	{ .soc_id = "r8a7796" },
 	{ .soc_id = "r8a77965" },

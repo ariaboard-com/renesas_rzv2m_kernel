@@ -557,6 +557,10 @@ static const struct soc_device_attribute cpg_quirks_match[] __initconst = {
 		.soc_id = "r8a7796", .revision = "ES1.0",
 		.data = (void *)(RCKCR_CKSEL),
 	},
+        {
+                .soc_id = "r8arzv2m",
+                .data = (void *)(Z2FC_BIT_MASK_SFT_8 | ZG_PARENT_PLL0),
+        },
 	{ /* sentinel */ }
 };
 

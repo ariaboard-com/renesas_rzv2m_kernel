@@ -23,6 +23,7 @@
 #include "xhci-plat.h"
 #include "xhci-mvebu.h"
 #include "xhci-rcar.h"
+#include "xhci-rzv2m.h"
 
 static struct hc_driver __read_mostly xhci_plat_hc_driver;
 
@@ -111,6 +112,12 @@ static const struct xhci_plat_priv xhci_plat_renesas_rcar_gen3 = {
 	.resume_quirk = xhci_rcar_resume_quirk,
 };
 
+static const struct xhci_plat_priv xhci_plat_renesas_rzv2m = {
+//    .firmware_name = XHCI_RCAR_FIRMWARE_NAME_V3,
+    .init_quirk = xhci_rzv2m_drd_init,
+    .plat_start = xhci_rzv2m_start,
+//    .resume_quirk = xhci_rcar_resume_quirk,
+};
 static const struct of_device_id usb_xhci_of_match[] = {
 	{
 		.compatible = "generic-xhci",
@@ -141,8 +148,8 @@ static const struct of_device_id usb_xhci_of_match[] = {
 		.compatible = "renesas,rcar-gen2-xhci",
 		.data = &xhci_plat_renesas_rcar_gen2,
 	}, {
-		.compatible = "renesas,rcar-gen3-xhci",
-		.data = &xhci_plat_renesas_rcar_gen3,
+                .compatible = "renesas,rzv2m-xhci",
+                .data = &xhci_plat_renesas_rzv2m,
 	},
 	{},
 };

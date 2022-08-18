@@ -49,7 +49,9 @@ $(warning Detected assembler with broken .inst; disassembly will be unreliable)
   endif
 endif
 
-KBUILD_CFLAGS	+= -mgeneral-regs-only $(lseinstr) $(brokengasinst)
+# This is a workaround for https://bugs.llvm.org/show_bug.cgi?id=30792.
+KBUILD_CFLAGS   += $(call clang-ifversion, -lt, 0600, -mno-implicit-float, -mgeneral-regs-only)
+KBUILD_CFLAGS   += $(lseinstr) $(brokengasinst)
 KBUILD_CFLAGS	+= -fno-asynchronous-unwind-tables
 KBUILD_CFLAGS	+= $(call cc-disable-warning, psabi)
 KBUILD_AFLAGS	+= $(lseinstr) $(brokengasinst)

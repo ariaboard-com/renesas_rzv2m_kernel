@@ -62,6 +62,11 @@ static const struct renesas_family fam_rzg2 __initconst __maybe_unused = {
 	.reg	= 0xfff00044,		/* PRR (Product Register) */
 };
 
+static const struct renesas_family fam_rzv2 __initconst __maybe_unused = {
+       .name   = "RZ/V2M",
+       .reg    = 0xA3F03104,           /* SYS (Version Register) */
+};
+
 static const struct renesas_family fam_shmobile __initconst __maybe_unused = {
 	.name	= "SH-Mobile",
 	.reg	= 0xe600101c,		/* CCCR (Common Chip Code Register) */
@@ -130,6 +135,11 @@ static const struct renesas_soc soc_rz_g2e __initconst __maybe_unused = {
 static const struct renesas_soc soc_rz_g2h __initconst __maybe_unused = {
 	.family	= &fam_rzg2,
 	.id	= 0x4f,
+};
+
+static const struct renesas_soc soc_rz_v2m __initconst __maybe_unused = {
+       .family = &fam_rzv2,
+       .id     = 0x10,
 };
 
 static const struct renesas_soc soc_rcar_m1a __initconst __maybe_unused = {
@@ -247,6 +257,9 @@ static const struct of_device_id renesas_socs[] __initconst = {
 #ifdef CONFIG_ARCH_R8A774E1
 	{ .compatible = "renesas,r8a774e1",	.data = &soc_rz_g2h },
 #endif
+#ifdef CONFIG_ARCH_R9A09G011GBG
+       { .compatible = "renesas,r9a09g011gbg", .data = &soc_rz_v2m },
+#endif
 #ifdef CONFIG_ARCH_R8A7778
 	{ .compatible = "renesas,r8a7778",	.data = &soc_rcar_m1a },
 #endif
@@ -313,6 +326,7 @@ static int __init renesas_soc_init(void)
 	soc = match->data;
 	family = soc->family;
 
+#ifndef CONFIG_ARCH_R9A09G011GBG
 	/* Try PRR first, then hardcoded fallback */
 	np = of_find_compatible_node(NULL, NULL, "renesas,prr");
 	if (np) {
@@ -335,7 +349,7 @@ static int __init renesas_soc_init(void)
 			return -ENODEV;
 		}
 	}
-
+#endif
 	soc_dev_attr = kzalloc(sizeof(*soc_dev_attr), GFP_KERNEL);
 	if (!soc_dev_attr)
 		return -ENOMEM;
@@ -347,13 +361,20 @@ static int __init renesas_soc_init(void)
 	soc_dev_attr->family = kstrdup_const(family->name, GFP_KERNEL);
 	soc_dev_attr->soc_id = kstrdup_const(strchr(match->compatible, ',') + 1,
 					     GFP_KERNEL);
+#ifndef CONFIG_ARCH_R9A09G011GBG
 	if (chipid)
 		soc_dev_attr->revision = kasprintf(GFP_KERNEL, "ES%u.%u",
 						   ((product >> 4) & 0x0f) + 1,
 						   product & 0xf);
+#else
+       product = 0x0;
+       soc_dev_attr->revision = kasprintf(GFP_KERNEL, "ES%u.%u",
+                                          ((product >> 4) & 0x0f) + 1,
+                                          product & 0xf);
+#endif
 
-	pr_info("Detected Renesas %s %s %s\n", soc_dev_attr->family,
-		soc_dev_attr->soc_id, soc_dev_attr->revision ?: "");
+        pr_info("Detected Renesas %s (%s)\n", soc_dev_attr->family,
+                soc_dev_attr->soc_id ?: "");
 
 	soc_dev = soc_device_register(soc_dev_attr);
 	if (IS_ERR(soc_dev)) {

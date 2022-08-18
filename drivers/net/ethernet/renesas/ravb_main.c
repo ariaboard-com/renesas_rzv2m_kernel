@@ -195,7 +195,7 @@ static int ravb_tx_free(struct net_device *ndev, int q, bool free_txed_only)
 		size = le16_to_cpu(desc->ds_tagl) & TX_DS;
 		/* Free the original skb. */
 		if (priv->tx_skb[q][entry / num_tx_desc]) {
-			dma_unmap_single(ndev->dev.parent, le32_to_cpu(desc->dptr),
+			dma_unmap_single(ndev->dev.parent, BANK_SETTING | le32_to_cpu(desc->dptr),
 					 size, DMA_TO_DEVICE);
 			/* Last packet descriptor? */
 			if (entry % num_tx_desc == num_tx_desc - 1) {
@@ -227,9 +227,9 @@ static void ravb_ring_free(struct net_device *ndev, int q)
 			struct ravb_ex_rx_desc *desc = &priv->rx_ring[q][i];
 
 			if (!dma_mapping_error(ndev->dev.parent,
-					       le32_to_cpu(desc->dptr)))
+					       BANK_SETTING | le32_to_cpu(desc->dptr)))
 				dma_unmap_single(ndev->dev.parent,
-						 le32_to_cpu(desc->dptr),
+						BANK_SETTING | le32_to_cpu(desc->dptr),
 						 priv->rx_buf_sz,
 						 DMA_FROM_DEVICE);
 		}
@@ -589,7 +589,7 @@ static bool ravb_rx(struct net_device *ndev, int *quota, int q)
 
 			skb = priv->rx_skb[q][entry];
 			priv->rx_skb[q][entry] = NULL;
-			dma_unmap_single(ndev->dev.parent, le32_to_cpu(desc->dptr),
+			dma_unmap_single(ndev->dev.parent, BANK_SETTING | le32_to_cpu(desc->dptr),
 					 priv->rx_buf_sz,
 					 DMA_FROM_DEVICE);
 			get_ts &= (q == RAVB_NC) ?
@@ -1492,7 +1492,7 @@ static netdev_tx_t ravb_start_xmit(struct sk_buff *skb, struct net_device *ndev)
 	struct ravb_tstamp_skb *ts_skb;
 	struct ravb_tx_desc *desc;
 	unsigned long flags;
-	u32 dma_addr;
+	dma_addr_t dma_addr;
 	void *buffer;
 	u32 entry;
 	u32 len;
@@ -1541,7 +1541,7 @@ static netdev_tx_t ravb_start_xmit(struct sk_buff *skb, struct net_device *ndev)
 
 		desc = &priv->tx_ring[q][entry];
 		desc->ds_tagl = cpu_to_le16(len);
-		desc->dptr = cpu_to_le32(dma_addr);
+	desc->dptr = cpu_to_le32((u32)dma_addr);
 
 		buffer = skb->data + len;
 		len = skb->len - len;
@@ -1560,7 +1560,7 @@ static netdev_tx_t ravb_start_xmit(struct sk_buff *skb, struct net_device *ndev)
 			goto drop;
 	}
 	desc->ds_tagl = cpu_to_le16(len);
-	desc->dptr = cpu_to_le32(dma_addr);
+	desc->dptr = cpu_to_le32((u32)dma_addr);
 
 	/* TX timestamp required */
 	if (q == RAVB_NC) {
@@ -1608,7 +1608,7 @@ exit:
 	return NETDEV_TX_OK;
 
 unmap:
-	dma_unmap_single(ndev->dev.parent, le32_to_cpu(desc->dptr),
+	dma_unmap_single(ndev->dev.parent, BANK_SETTING | le32_to_cpu(desc->dptr),
 			 le16_to_cpu(desc->ds_tagl), DMA_TO_DEVICE);
 drop:
 	dev_kfree_skb_any(skb);
@@ -1934,6 +1934,7 @@ static const struct of_device_id ravb_match_table[] = {
 	{ .compatible = "renesas,etheravb-rcar-gen2", .data = (void *)RCAR_GEN2 },
 	{ .compatible = "renesas,etheravb-r8a7795", .data = (void *)RCAR_GEN3 },
 	{ .compatible = "renesas,etheravb-rcar-gen3", .data = (void *)RCAR_GEN3 },
+        { .compatible = "renesas,renesas,etheravb-r8arzv2m", .data = (void *)RCAR_GEN3 },
 	{ }
 };
 MODULE_DEVICE_TABLE(of, ravb_match_table);
@@ -2033,6 +2034,8 @@ static int ravb_probe(struct platform_device *pdev)
 	if (!ndev)
 		return -ENOMEM;
 
+	dma_set_mask_and_coherent(&pdev->dev,DMA_BIT_MASK(34));  //34bit extension for rzv2m 
+	
 	ndev->features = NETIF_F_RXCSUM;
 	ndev->hw_features = NETIF_F_RXCSUM;
 

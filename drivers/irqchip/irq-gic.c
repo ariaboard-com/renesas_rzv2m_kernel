@@ -50,6 +50,8 @@
 
 #include "irq-gic-common.h"
 
+#include "irq-gic-renesas-rzv2m.h"
+
 #ifdef CONFIG_ARM64
 #include <asm/cpufeature.h>
 
@@ -324,8 +326,10 @@ static int gic_irq_set_vcpu_affinity(struct irq_data *d, void *vcpu)
 static int gic_set_affinity(struct irq_data *d, const struct cpumask *mask_val,
 			    bool force)
 {
-	void __iomem *reg = gic_dist_base(d) + GIC_DIST_TARGET + gic_irq(d);
-	unsigned int cpu;
+	void __iomem *reg = gic_dist_base(d) + GIC_DIST_TARGET + (gic_irq(d) & ~3);
+	unsigned int cpu, shift = (gic_irq(d) % 4) * 8;
+	u32 val, bit;
+	unsigned long flags;
 
 	if (!force)
 		cpu = cpumask_any_and(mask_val, cpu_online_mask);
@@ -335,7 +339,12 @@ static int gic_set_affinity(struct irq_data *d, const struct cpumask *mask_val,
 	if (cpu >= NR_GIC_CPU_IF || cpu >= nr_cpu_ids)
 		return -EINVAL;
 
-	writeb_relaxed(gic_cpu_map[cpu], reg);
+	gic_lock_irqsave(flags);
+    bit = gic_cpu_map[cpu] << shift;
+	val = readl_relaxed(reg) | bit;
+	writel_relaxed(val, reg);
+	gic_unlock_irqrestore(flags);
+
 	irq_data_update_effective_affinity(d, cpumask_of(cpu));
 
 	return IRQ_SET_MASK_OK_DONE;
@@ -482,20 +491,21 @@ static void gic_dist_init(struct gic_chip_data *gic)
 	unsigned int gic_irqs = gic->gic_irqs;
 	void __iomem *base = gic_data_dist_base(gic);
 
-	writel_relaxed(GICD_DISABLE, base + GIC_DIST_CTRL);
-
 	/*
-	 * Set all global interrupts to this CPU only.
+	 * Set all global interrupts to CPU #0 and #1 for RZ/V2M.
 	 */
-	cpumask = gic_get_cpumask(gic);
-	cpumask |= cpumask << 8;
-	cpumask |= cpumask << 16;
-	for (i = 32; i < gic_irqs; i += 4)
-		writel_relaxed(cpumask, base + GIC_DIST_TARGET + i * 4 / 4);
-
+    {
+        unsigned int cnt, t_size;
+        t_size = sizeof(gic_init_target) / sizeof(u32);
+    	for (cnt = 0; cnt < t_size; cnt++)
+            writel_relaxed(gic_init_target[cnt], base + GIC_DIST_TARGET + (0x20+(cnt*4)));
+    }
+    
 	gic_dist_config(base, gic_irqs, NULL);
 
-	writel_relaxed(GICD_ENABLE, base + GIC_DIST_CTRL);
+       if (0 == (readl_relaxed(base + GIC_DIST_CTRL)&GICD_ENABLE)) {
+               writel_relaxed(GICD_ENABLE, base + GIC_DIST_CTRL);
+       }
 }
 
 static int gic_cpu_init(struct gic_chip_data *gic)

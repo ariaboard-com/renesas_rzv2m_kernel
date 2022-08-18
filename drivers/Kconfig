@@ -219,4 +219,8 @@ source "drivers/siox/Kconfig"
 
 source "drivers/slimbus/Kconfig"
 
+source "drivers/udmabuf/Kconfig"
+
+source "drivers/hw_tim/Kconfig"
+
 endmenu

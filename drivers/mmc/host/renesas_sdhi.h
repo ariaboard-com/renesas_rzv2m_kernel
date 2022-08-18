@@ -64,6 +64,8 @@ struct renesas_sdhi {
 	struct pinctrl_state *pins_default, *pins_uhs;
 	void __iomem *scc_ctl;
 	u32 scc_tappos;
+        u32 psc_pins;
+        u8  switching_volt_type;
 	u32 scc_tappos_hs400;
 	bool doing_tune;
 	bool dtranend1_bit17;

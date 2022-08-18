@@ -220,6 +220,12 @@ config ARCH_R8A774E1
 	help
 	  This enables support for the Renesas RZ/G2H SoC.
 
+config ARCH_R9A09G011GBG
+       bool "Renesas RZ/V2M SoC Platform"
+       depends on ARCH_RENESAS
+       help
+         This enables support for the Renesas RZ/V2M SoC.
+
 config ARCH_R8A7795
 	bool "Renesas R-Car H3 SoC Platform"
 	depends on ARCH_RENESAS

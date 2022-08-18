@@ -302,6 +302,9 @@ static const struct of_device_id rcar_sysc_matches[] __initconst = {
 #ifdef CONFIG_SYSC_R8A774E1
 	{ .compatible = "renesas,r8a774e1-sysc", .data = &r8a774e1_sysc_info },
 #endif
+#ifdef CONFIG_SYSC_R9A09G011GBG
+       { .compatible = "renesas,r8arzv2m-sysc", .data = &r8arzv2m_sysc_info },
+#endif
 #ifdef CONFIG_SYSC_R8A7779
 	{ .compatible = "renesas,r8a7779-sysc", .data = &r8a7779_sysc_info },
 #endif
@@ -359,6 +362,10 @@ static int __init rcar_sysc_pd_init(void)
 	void __iomem *base;
 	unsigned int i;
 	int error;
+
+#ifdef CONFIG_SYSC_R9A09G011GBG
+		return 0;
+#endif
 
 	np = of_find_matching_node_and_match(NULL, rcar_sysc_matches, &match);
 	if (!np)
