@@ -159,21 +159,6 @@
         compatible = "idt,9fgv0241";
         reg = <0x68>;
     };
-    
-    
-    tlv320dac3101: tlv320dac3101@47 {
-        #sound-dai-cells = <0>;
-        compatible = "ti,tlv320dac3101";
-        reg = <0x47>;
-        status = "okay";
-        ai3x-micbias-vg = <2>;
-
-        /* Regulators */
-        AVDD-supply = <&reg_3p3v>;
-        IOVDD-supply = <&reg_3p3v>;
-        DRVDD-supply = <&reg_3p3v>;
-        DVDD-supply = <&reg_1p8v>;
-    };
 };
 
 &i2c2 {
